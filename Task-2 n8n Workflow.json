@@ -1,0 +1,263 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b3a01a14-7f64-43ac-8670-273a843506f4",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    person_id,\n    full_name,\n    skill_source_text\nFROM people_master\nWHERE skill_source_text IS NOT NULL\n  AND TRIM(skill_source_text) <> '';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "1e97f6d1-4c94-4e98-9c63-85ec547427eb",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "mySql": {
+          "id": "mW3myUUuUj1ahbB5",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.1-8b-instant\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are a skill classifier. Classify EVERY person below into exactly ONE category from this list: automation-heavy, web dev, data, design, sales, other.\\n\\nReturn ONLY a valid JSON array. Each object must contain person_id and category. Do not include markdown, explanations, or extra text.\\n\\nPeople:\\n{{ $input.all().map(item => `person_id: ${item.json.person_id}, name: ${item.json.full_name}, skills: ${item.json.skill_source_text}`).join('\\\\n') }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ],
+      "id": "4b0326d2-cc7f-4a94-861d-442fdd0141b1",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7478343d-3662-4c85-b087-ce9ecf7fa4f6",
+              "name": "skill_category",
+              "value": "={{ $json.choices[0].message.content.trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "20a549d2-3f03-4100-bb3d-e2178caf4945",
+              "name": "person_id",
+              "value": "={{ $(\"Execute a SQL query\").item.json.person_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "7b5206e8-7a71-4e5b-bf61-237151d5aa24",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "67144913-c746-4ce8-b3e5-dd902cb08321",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        16
+      ],
+      "id": "48bbc37d-24c2-4c86-93b2-3096aa85cb06",
+      "name": "Wait",
+      "webhookId": "65736c87-2534-4b83-ba2c-7ff90c4e9f4f"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n\n  const data = item.json;\n\n  // AI category Edit Fields se aa rahi hai\n  let categoryText =\n    data.skill_category ??\n    data.choices?.[0]?.message?.content ??\n    data.message?.content ??\n    data.content ??\n    '';\n\n  categoryText = String(categoryText)\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .replace(/[\"']/g, '')\n    .trim()\n    .toLowerCase();\n\n  let skill_category = 'other';\n\n  if (categoryText.includes('automation')) {\n    skill_category = 'automation-heavy';\n  }\n  else if (\n    categoryText.includes('web dev') ||\n    categoryText.includes('software developer') ||\n    categoryText.includes('software development') ||\n    categoryText.includes('web development')\n  ) {\n    skill_category = 'web dev';\n  }\n  else if (categoryText.includes('data')) {\n    skill_category = 'data';\n  }\n  else if (categoryText.includes('design')) {\n    skill_category = 'design';\n  }\n  else if (categoryText.includes('sales')) {\n    skill_category = 'sales';\n  }\n\n  return {\n    json: {\n      person_id: data.person_id,\n      skill_category: skill_category\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "c034da46-03bd-4453-898d-3e1146f822eb",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE people_master\nSET skill_category = '{{$json.skill_category}}'\nWHERE person_id = {{$json.person_id}};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "5d30ea34-f5d3-415a-a8af-30591f196cc7",
+      "name": "Update SQL Query",
+      "credentials": {
+        "mySql": {
+          "id": "mW3myUUuUj1ahbB5",
+          "name": "MySQL account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Update SQL Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update SQL Query": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a1f28f06-5fc2-4c45-8181-e3b96fd19763",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4ceebbf01bbb96bd689be1b38f87dd8b6c9a78ee3d4206c8eede66b400328a4b"
+  },
+  "nodeGroups": [],
+  "id": "XrwSsPw8NRxBxPEQ",
+  "tags": []
+}
