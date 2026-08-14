@@ -1,0 +1,4 @@
+.env
+audio_storage/
+__pycache__/
+*.pyc
