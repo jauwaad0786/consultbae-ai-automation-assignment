@@ -42,7 +42,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer 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"
+              "value": "Bearer gsk_xxxxxxxxxxxxxx"
             },
             {
               "name": "Content-Type",
